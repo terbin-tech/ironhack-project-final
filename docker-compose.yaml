@@ -1,0 +1,50 @@
+# Local development only: the credentials are the brief's demo values.
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        # The browser calls the backend on the host's published port
+        NEXT_PUBLIC_API_URL: http://localhost:8706
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file: expensy_backend/.env
+    ports:
+      - "8706:8706"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mongo:
+    image: mongo:8.0.38@sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    command: ["redis-server", "--requirepass", "someredispassword"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "someredispassword", "--no-auth-warning", "ping"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  mongo-data:

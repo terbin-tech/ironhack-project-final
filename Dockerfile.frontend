@@ -1,0 +1,37 @@
+FROM node:26.13.1-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS build
+WORKDIR /app
+COPY expensy_frontend/package.json expensy_frontend/package-lock.json ./
+RUN npm ci
+COPY expensy_frontend/ ./
+# NEXT_PUBLIC_API_URL is inlined at build time, so each origin needs its own image.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8706
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:26.13.1-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc
+
+# Security updates, and tini so node does not run as PID 1
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends tini && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    NEXT_TELEMETRY_DISABLED=1
+
+# server.js does not copy the static files itself
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+
+EXPOSE 3000
+
+# Numeric (node), so Kubernetes can verify runAsNonRoot
+USER 1000
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "server.js"]

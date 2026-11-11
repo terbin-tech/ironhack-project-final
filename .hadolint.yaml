@@ -1,0 +1,3 @@
+ignored:
+  # Debian keeps only the current version of each package, so exact pins break on the next update.
+  - DL3008
