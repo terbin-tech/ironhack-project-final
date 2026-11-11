@@ -1,6 +1,6 @@
 import { Schema, model, Document } from 'mongoose';
 
-interface IExpense extends Document {
+export interface IExpense extends Document {
   name: string;
   amount: number;
   category: string;

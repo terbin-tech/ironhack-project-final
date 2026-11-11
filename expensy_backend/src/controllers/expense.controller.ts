@@ -1,26 +1,34 @@
+import type { Request, Response } from 'express';
+import mongoose from 'mongoose';
+import type { ExpenseService } from '../services/expense.service';
+import { logError } from '../log';
 
-import { Request, Response } from 'express';
-import { ExpenseService } from '../services/expense.service';
+const isInvalidInput = (error: unknown): error is Error =>
+  error instanceof mongoose.Error.ValidationError || error instanceof mongoose.Error.CastError;
 
-const expenseService = new ExpenseService();
+export function expenseController(service: ExpenseService) {
+  return {
+    getExpenses: async (_req: Request, res: Response) => {
+      try {
+        res.status(200).json(await service.getAllExpenses());
+      } catch (error) {
+        logError('Failed to fetch expenses', error);
+        res.status(500).json({ error: 'Failed to fetch expenses' });
+      }
+    },
 
-export const getExpenses = async (req: Request, res: Response) => {
-  try {
-    const expenses = await expenseService.getAllExpenses();
-    res.status(200).json(expenses);
-  } catch (error) {
-    console.error('Failed to fetch expenses:', error);
-    res.status(500).json({ error: 'Failed to fetch expenses' });
-  }
-};
-
-export const addExpense = async (req: Request, res: Response) => {
-  try {
-    const { name, amount, category } = req.body;
-    const expense = await expenseService.createExpense({ name, amount, category });
-    res.status(201).json(expense);
-  } catch (error) {
-    console.error('Failed to create expense:', error);
-    res.status(500).json({ error: 'Failed to create expense' });
-  }
-};
+    addExpense: async (req: Request, res: Response) => {
+      try {
+        const { name, amount, category } = req.body ?? {};
+        res.status(201).json(await service.createExpense({ name, amount, category }));
+      } catch (error) {
+        if (isInvalidInput(error)) {
+          res.status(400).json({ error: error.message });
+          return;
+        }
+        logError('Failed to create expense', error);
+        res.status(500).json({ error: 'Failed to create expense' });
+      }
+    },
+  };
+}

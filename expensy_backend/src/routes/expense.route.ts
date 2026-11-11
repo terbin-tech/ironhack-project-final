@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { getExpenses, addExpense } from '../controllers/expense.controller';
+import { expenseController } from '../controllers/expense.controller';
+import type { ExpenseService } from '../services/expense.service';
 
-const router = Router();
-
-router.get('/expenses', getExpenses);
-router.post('/expenses', addExpense);
-
-export default router;
+export function expenseRoutes(service: ExpenseService): Router {
+  const { getExpenses, addExpense } = expenseController(service);
+  const router = Router();
+  router.get('/expenses', getExpenses);
+  router.post('/expenses', addExpense);
+  return router;
+}

@@ -1,17 +1,14 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import type { Settings } from './settings';
+import { logError } from '../log';
 
-dotenv.config();
-
-const connectDB = async () => {
+// Exits on failure, so the server never listens without a database.
+export async function connectDB(mongo: Settings['mongo']): Promise<void> {
   try {
-    await mongoose.connect(process.env.DATABASE_URI!, {
-    });
+    await mongoose.connect(mongo.uri, mongo.options);
     console.log('MongoDB connected');
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    logError('MongoDB connection error', error);
     process.exit(1);
   }
-};
-
-export default connectDB;
+}
