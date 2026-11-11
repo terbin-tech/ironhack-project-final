@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (git-ignored).
+state_bucket = "martin-tfstate-<account-id>-us-east-1-an"
