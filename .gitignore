@@ -1,0 +1,12 @@
+# .terraform.lock.hcl stays committed, as HashiCorp recommends.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+*.tfvars.json
+# Partial backend configuration: the state bucket name holds the account ID
+backend.hcl
+
+tfplan
+*.tfplan

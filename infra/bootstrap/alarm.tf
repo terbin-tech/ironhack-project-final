@@ -1,0 +1,164 @@
+# The bucket policy denies requests without TLS; this alarm reports attempts,
+# counted from CloudTrail data events by a metric filter.
+
+locals {
+  trail_name = "martin-project-final-s3"
+  trail_arn  = "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${local.trail_name}"
+}
+
+resource "aws_cloudwatch_log_group" "trail" {
+  name              = "martin-project-final-s3-trail"
+  retention_in_days = 7
+}
+
+resource "aws_iam_role" "trail" {
+  name = "martin-project-final-s3-trail"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+      Condition = { StringEquals = { "aws:SourceArn" = local.trail_arn } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "trail" {
+  name = "logs"
+  role = aws_iam_role.trail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+      Resource = "${aws_cloudwatch_log_group.trail.arn}:log-stream:${data.aws_caller_identity.current.account_id}_CloudTrail_us-east-1*"
+    }]
+  })
+}
+
+resource "aws_cloudtrail" "s3" {
+  name                          = local.trail_name
+  s3_bucket_name                = aws_s3_bucket.logs.id
+  s3_key_prefix                 = "cloudtrail"
+  include_global_service_events = false
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.trail.arn}:*"
+  cloud_watch_logs_role_arn     = aws_iam_role.trail.arn
+
+  advanced_event_selector {
+    name = "Object-level requests to the state bucket"
+
+    field_selector {
+      field  = "eventCategory"
+      equals = ["Data"]
+    }
+
+    field_selector {
+      field  = "resources.type"
+      equals = ["AWS::S3::Object"]
+    }
+
+    field_selector {
+      field       = "resources.ARN"
+      starts_with = ["${aws_s3_bucket.state.arn}/"]
+    }
+  }
+
+  depends_on = [aws_s3_bucket_policy.logs, aws_iam_role_policy.trail]
+}
+
+resource "aws_cloudwatch_log_metric_filter" "without_tls" {
+  name           = "martin-project-final-s3-without-tls"
+  log_group_name = aws_cloudwatch_log_group.trail.name
+  pattern        = "{ $.tlsDetails.tlsVersion NOT EXISTS }"
+
+  metric_transformation {
+    name      = "S3RequestsWithoutTLS"
+    namespace = "martin-project-final"
+    value     = "1"
+  }
+}
+
+resource "aws_sns_topic" "alarm" {
+  name = "martin-project-final-s3-alarm"
+}
+
+# Replaces the topic's whole policy, so SNS's default statement is repeated.
+resource "aws_sns_topic_policy" "alarm" {
+  arn    = aws_sns_topic.alarm.arn
+  policy = data.aws_iam_policy_document.alarm_topic.json
+}
+
+data "aws_iam_policy_document" "alarm_topic" {
+  policy_id = "__default_policy_ID"
+
+  statement {
+    sid = "__default_statement_ID"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    actions = [
+      "SNS:GetTopicAttributes",
+      "SNS:SetTopicAttributes",
+      "SNS:AddPermission",
+      "SNS:RemovePermission",
+      "SNS:DeleteTopic",
+      "SNS:Subscribe",
+      "SNS:ListSubscriptionsByTopic",
+      "SNS:Publish",
+    ]
+
+    resources = [aws_sns_topic.alarm.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceOwner"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+
+  statement {
+    sid = "GuardDutyFindingsRule"
+
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.alarm.arn]
+
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = ["arn:aws:events:us-east-1:${data.aws_caller_identity.current.account_id}:rule/martin-project-final-guardduty"]
+    }
+  }
+}
+
+resource "aws_sns_topic_subscription" "alarm" {
+  count = var.alarm_email == null ? 0 : 1
+
+  topic_arn = aws_sns_topic.alarm.arn
+  protocol  = "email"
+  endpoint  = var.alarm_email
+}
+
+resource "aws_cloudwatch_metric_alarm" "without_tls" {
+  alarm_name          = "martin-project-final-s3-without-tls"
+  alarm_description   = "A request to a Terraform state bucket was made without TLS."
+  namespace           = "martin-project-final"
+  metric_name         = "S3RequestsWithoutTLS"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarm.arn]
+}

@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (git-ignored). Optional: without it the alarm has no subscriber.
+alarm_email = "firstname.lastname@example.com"
