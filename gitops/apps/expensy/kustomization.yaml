@@ -14,6 +14,8 @@ configMapGenerator:
 # No registry: the expensy Application adds it and keeps these tags and digests.
 images:
   - name: martin-expensy-frontend
-    newTag: pending
+    newTag: 4b623317b43c93869a552c758f8e0ebabd608453
+    digest: sha256:0453305ecdb4ec0b7025597b037a97d3d74fd008697849c4c1ea557d929d575b
   - name: martin-expensy-backend
-    newTag: pending
+    newTag: 4b623317b43c93869a552c758f8e0ebabd608453
+    digest: sha256:becaee42426f8f64ab5496a11b1a767584b51666f410696497d528e2d9ecf0c8
