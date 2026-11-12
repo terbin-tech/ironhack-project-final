@@ -1,0 +1,181 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: martin-project-final
+  source:
+    repoURL: quay.io/jetstack/charts
+    chart: cert-manager
+    targetRevision: v1.21.3
+    helm:
+      valuesObject:
+        # cert-manager's best-practice values (cert-manager.io/docs/installation/best-practice),
+        # except the chart's PodDisruptionBudgets and NetworkPolicies.
+        global:
+          priorityClassName: system-cluster-critical
+        replicaCount: 2
+        automountServiceAccountToken: false
+        serviceAccount:
+          automountServiceAccountToken: false
+        volumes:
+          - name: serviceaccount-token
+            projected:
+              defaultMode: 0444
+              sources:
+                - serviceAccountToken:
+                    expirationSeconds: 3607
+                    path: token
+                - configMap:
+                    name: kube-root-ca.crt
+                    items:
+                      - key: ca.crt
+                        path: ca.crt
+                - downwardAPI:
+                    items:
+                      - path: namespace
+                        fieldRef:
+                          apiVersion: v1
+                          fieldPath: metadata.namespace
+        volumeMounts:
+          - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+            name: serviceaccount-token
+            readOnly: true
+        # Pinned by digest: a chart bump needs the new digests, or the old images keep running.
+        image:
+          tag: v1.21.3
+          digest: sha256:9f4f96a33c7774cef24466fcd85031997531a03a8d117f151126baa8d1290dcc
+        webhook:
+          replicaCount: 3
+          automountServiceAccountToken: false
+          serviceAccount:
+            automountServiceAccountToken: false
+          volumes:
+            - name: serviceaccount-token
+              projected:
+                defaultMode: 0444
+                sources:
+                  - serviceAccountToken:
+                      expirationSeconds: 3607
+                      path: token
+                  - configMap:
+                      name: kube-root-ca.crt
+                      items:
+                        - key: ca.crt
+                          path: ca.crt
+                  - downwardAPI:
+                      items:
+                        - path: namespace
+                          fieldRef:
+                            apiVersion: v1
+                            fieldPath: metadata.namespace
+          volumeMounts:
+            - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              name: serviceaccount-token
+              readOnly: true
+          image:
+            tag: v1.21.3
+            digest: sha256:055ac8e9de6a0ba6763794838fe38944acc650f68ebe1b01dd8be079e580f458
+        cainjector:
+          replicaCount: 2
+          # Only cert-manager's own webhook takes its CA from cainjector
+          extraArgs:
+            - --namespace=cert-manager
+            - --enable-certificates-data-source=false
+          automountServiceAccountToken: false
+          serviceAccount:
+            automountServiceAccountToken: false
+          volumes:
+            - name: serviceaccount-token
+              projected:
+                defaultMode: 0444
+                sources:
+                  - serviceAccountToken:
+                      expirationSeconds: 3607
+                      path: token
+                  - configMap:
+                      name: kube-root-ca.crt
+                      items:
+                        - key: ca.crt
+                          path: ca.crt
+                  - downwardAPI:
+                      items:
+                        - path: namespace
+                          fieldRef:
+                            apiVersion: v1
+                            fieldPath: metadata.namespace
+          volumeMounts:
+            - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              name: serviceaccount-token
+              readOnly: true
+          image:
+            tag: v1.21.3
+            digest: sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f
+        acmesolver:
+          image:
+            tag: v1.21.3
+            digest: sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7
+        startupapicheck:
+          automountServiceAccountToken: false
+          serviceAccount:
+            automountServiceAccountToken: false
+          volumes:
+            - name: serviceaccount-token
+              projected:
+                defaultMode: 0444
+                sources:
+                  - serviceAccountToken:
+                      expirationSeconds: 3607
+                      path: token
+                  - configMap:
+                      name: kube-root-ca.crt
+                      items:
+                        - key: ca.crt
+                          path: ca.crt
+                  - downwardAPI:
+                      items:
+                        - path: namespace
+                          fieldRef:
+                            apiVersion: v1
+                            fieldPath: metadata.namespace
+          volumeMounts:
+            - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              name: serviceaccount-token
+              readOnly: true
+          image:
+            tag: v1.21.3
+            digest: sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1
+        crds:
+          enabled: true
+        config:
+          gatewayAPI:
+            enabled: true
+  destination:
+    name: in-cluster
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true
+    # Argo CD creates this namespace, so it sets the Pod Security labels too.
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: restricted
+        pod-security.kubernetes.io/enforce-version: latest
+        pod-security.kubernetes.io/warn: restricted
+        pod-security.kubernetes.io/audit: restricted
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
