@@ -12,7 +12,7 @@ export default function IndexPage() {
           built with NextJs and Tailwind CSS.
         </h1>
         <p className="max-w-[700px] text-lg text-muted-foreground">
-        Freely manage your expenses in a secure way
+        Freely manage your expenses in a secure way, running on Amazon EKS
         </p>
       </div>
       <div className="flex gap-4">
