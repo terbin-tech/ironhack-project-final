@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docdb-user-job
+  namespace: expensy
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: docdb-user-job-egress
+  namespace: expensy
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: docdb-user-job
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/19
+        - ipBlock:
+            cidr: 10.0.32.0/19
+      ports:
+        - protocol: TCP
+          port: 27017
+---
+# Runs before the Deployments on every sync, so the backend's user exists before
+# the backend starts.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: docdb-user
+  namespace: expensy
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: docdb-user-job
+    spec:
+      serviceAccountName: docdb-user-job
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        # The mongo image declares no USER; 999 is its mongodb user
+        runAsUser: 999
+        runAsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mongosh
+          image: mongo:8.0.38@sha256:d97fea17ccb8d004cd137be8dab54d70d0df11be69c9f422aefe4484c8414ab7
+          command:
+            - mongosh
+            - --quiet
+            - --tls
+            - --tlsCAFile
+            - /ca/rds-global-bundle.pem
+            - --host
+            - $(DB_HOST):$(DB_PORT)
+            - --file
+            - /script/create-user.js
+          env:
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: expensy-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: expensy-config
+                  key: DB_PORT
+            # mongosh writes its history and logs under HOME
+            - name: HOME
+              value: /home/mongosh
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: home
+              mountPath: /home/mongosh
+            - name: script
+              mountPath: /script
+              readOnly: true
+            - name: ca
+              mountPath: /ca
+              readOnly: true
+            - name: secrets
+              mountPath: /mnt/secrets
+              readOnly: true
+      volumes:
+        - name: home
+          emptyDir: {}
+        - name: script
+          configMap:
+            name: docdb-create-user
+        - name: ca
+          configMap:
+            name: rds-ca
+        - name: secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: expensy-docdb-admin
