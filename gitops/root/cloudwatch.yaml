@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudwatch
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: martin-project-final
+  source:
+    repoURL: https://github.com/terbin-tech/ironhack-project-final.git
+    targetRevision: main
+    path: gitops/cloudwatch
+  destination:
+    name: in-cluster
+    namespace: amazon-cloudwatch
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m

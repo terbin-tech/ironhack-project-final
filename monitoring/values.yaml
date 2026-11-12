@@ -1,0 +1,101 @@
+# Helm values for kube-prometheus-stack (gitops/root/kube-prometheus-stack.yaml).
+
+alertmanager:
+  enabled: false
+
+# The EKS control plane does not expose these to the cluster, and Auto Mode
+# runs CoreDNS outside it (no kube-dns Service)
+coreDns:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheusOperator:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+  prometheusConfigReloader:
+    resources:
+      requests: { cpu: 10m, memory: 50Mi }
+      limits: { cpu: 100m, memory: 50Mi }
+  admissionWebhooks:
+    patch:
+      resources:
+        requests: { cpu: 10m, memory: 64Mi }
+        limits: { cpu: 100m, memory: 64Mi }
+
+prometheus:
+  prometheusSpec:
+    # Select ServiceMonitors without the chart's release label
+    serviceMonitorSelectorNilUsesHelmValues: false
+    # No persistent volume: the data lives as long as the pod
+    retention: 10d
+    resources:
+      requests: { cpu: 100m, memory: 1Gi }
+      limits: { cpu: "1", memory: 1Gi }
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+  # A Role in its own namespace instead of a ClusterRole that reads every Secret
+  rbac:
+    namespaced: true
+  sidecar:
+    dashboards:
+      enabled: true
+      # Unset, so the sidecar watches only its own namespace (the parent chart sets ALL)
+      searchNamespace: null
+    resources:
+      requests: { cpu: 10m, memory: 128Mi }
+      limits: { cpu: 100m, memory: 128Mi }
+  testFramework:
+    enabled: false
+  # Grafana's documented minimum is 512 MB and one core; 256Mi was OOMKilled at login
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { cpu: "1", memory: 512Mi }
+
+kube-state-metrics:
+  # The chart's default list without secrets
+  collectors:
+    - certificatesigningrequests
+    - configmaps
+    - cronjobs
+    - daemonsets
+    - deployments
+    - endpointslices
+    - horizontalpodautoscalers
+    - ingresses
+    - jobs
+    - leases
+    - limitranges
+    - mutatingwebhookconfigurations
+    - namespaces
+    - networkpolicies
+    - nodes
+    - persistentvolumeclaims
+    - persistentvolumes
+    - poddisruptionbudgets
+    - pods
+    - replicasets
+    - replicationcontrollers
+    - resourcequotas
+    - services
+    - statefulsets
+    - storageclasses
+    - validatingwebhookconfigurations
+    - volumeattachments
+  resources:
+    requests: { cpu: 10m, memory: 128Mi }
+    limits: { cpu: 100m, memory: 128Mi }
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }
+    limits: { cpu: 100m, memory: 64Mi }

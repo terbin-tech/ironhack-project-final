@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - expensy
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  endpoints:
+    - port: http
+      path: /metrics

@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - service-monitor.yaml
+  - network-policies.yaml
+configMapGenerator:
+  - name: expensy-dashboard
+    namespace: monitoring
+    files:
+      - dashboards/expensy.json
+    options:
+      # Grafana's dashboard sidecar loads ConfigMaps with this label
+      labels:
+        grafana_dashboard: "1"

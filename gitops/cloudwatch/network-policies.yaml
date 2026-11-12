@@ -1,0 +1,55 @@
+# The agent and Fluent Bit use the host network, so pod policies do not apply to
+# them; these cover the add-on's controller.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: amazon-cloudwatch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: amazon-cloudwatch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.100.0.10/32
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: controller
+  namespace: amazon-cloudwatch
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: amazon-cloudwatch-observability
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    # Kubernetes API and AWS endpoints
+    - ports:
+        - protocol: TCP
+          port: 443
+  ingress:
+    # The API server calls the webhooks; a missing rule delays every pod create by
+    # their 10 s timeout.
+    - ports:
+        - protocol: TCP
+          port: 9443
