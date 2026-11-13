@@ -234,6 +234,12 @@ The pipeline needs only the two secrets above and the `production` environment, 
 
 Deploy runs queue instead of cancelling each other, so every push gets its own images and tag commit. Every deploy adds a commit to `main`, so run `git pull --rebase` before pushing.
 
+### Before and after Argo CD
+
+The brief's pipeline deploys to the cluster itself: its last step runs `kubectl apply` or `helm upgrade`, so GitHub holds cluster credentials and the Kubernetes API has to accept GitHub's runners. This pipeline has no such step. It ends with the tag commit above, and Argo CD pulls that commit from inside AWS. All ten Applications sync automatically with `prune` and `selfHeal` on (`infra/gitops-bridge/main.tf`, `gitops/root/`), so Argo CD reverts changes made to its resources outside Git: on 12 November 2026, `kubectl scale deploy/frontend -n expensy --replicas=3` was back to 2 replicas within 4 seconds. A deploy is a push to Git, not a command run against the cluster. On 13 November 2026 all ten were `Synced` and `Healthy`:
+
+![Argo CD's application list: all ten Applications Synced and Healthy](docs/argocd-applications.png)
+
 ## Monitoring
 
 Deploy step 3 installs the monitoring stack, and step 4 is its one manual part. Argo CD installs [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) 93.2.2 in the namespace `monitoring` (`gitops/root/kube-prometheus-stack.yaml`), with the values in `monitoring/values.yaml` read from this repository. A second Application, `monitoring-extras`, applies `monitoring/` itself: the `ServiceMonitor` that makes Prometheus scrape the backend's `/metrics`, the dashboard, and the namespace's network policies.
